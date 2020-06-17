@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	validPasswordRegexLiteral = `^[^"]{40,512}$`
+	validPasswordRegexLiteral = `^[^"]{1,512}$`
 	validRoleRegexLiteral     = `^[^"]{1,256}$`
 )
 
