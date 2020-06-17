@@ -1,6 +1,6 @@
 module github.com/siteminder-au/terraform-provider-cassandra
 
-go 1.13
+go 1.14
 
 require (
 	github.com/gocql/gocql v0.0.0-20191106222750-ae2f7fc85f32

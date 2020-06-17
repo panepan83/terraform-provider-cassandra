@@ -18,6 +18,7 @@ var (
 		"TLS1.0": tls.VersionTLS10,
 		"TLS1.1": tls.VersionTLS11,
 		"TLS1.2": tls.VersionTLS12,
+		"TLS1.3": tls.VersionTLS13,
 	}
 )
 
