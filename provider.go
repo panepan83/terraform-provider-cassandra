@@ -10,6 +10,7 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/terraform"
 )
 
 var (
@@ -23,7 +24,7 @@ var (
 )
 
 // Provider returns a terraform.ResourceProvider
-func Provider() *schema.Provider {
+func Provider() terraform.ResourceProvider {
 	return &schema.Provider{
 		ResourcesMap: map[string]*schema.Resource{
 			"cassandra_keyspace": resourceCassandraKeyspace(),
@@ -68,6 +69,12 @@ func Provider() *schema.Provider {
 				},
 				MinItems: 1,
 				Required: true,
+			},
+			"host_filter": &schema.Schema{
+				Type: schema.TypeBool,
+				Optional: true,
+				Default: false,
+				Description: "Filter all incoming events for host. Hosts have to existing before using this provider",
 			},
 			"connection_timeout": &schema.Schema{
 				Type:        schema.TypeInt,
@@ -145,6 +152,7 @@ func configureProvider(d *schema.ResourceData) (interface{}, error) {
 	rawHosts := d.Get("hosts").([]interface{})
 
 	hosts := make([]string, len(rawHosts))
+	hostFilter := d.Get("host_filter").(bool)
 
 	for _, value := range rawHosts {
 		hosts = append(hosts, value.(string))
@@ -173,7 +181,9 @@ func configureProvider(d *schema.ResourceData) (interface{}, error) {
 
 	cluster.ProtoVersion = protocolVersion
 
-	cluster.HostFilter = gocql.WhiteListHostFilter(hosts...)
+	if hostFilter {
+		cluster.HostFilter = gocql.WhiteListHostFilter(hosts...)
+	}
 
 	cluster.DisableInitialHostLookup = true
 

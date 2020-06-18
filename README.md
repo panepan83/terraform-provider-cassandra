@@ -34,6 +34,10 @@ Cassandra client port. Default value is __9042__
 
 Array of hosts pointing to nodes in the cassandra cluster
 
+#### host_filter
+
+Filter all incoming events for a host. Hosts have to existing before using this provider.
+
 #### connection_timeout
 
 Connection timeout to the cluster in milliseconds. Default value is __1000__
