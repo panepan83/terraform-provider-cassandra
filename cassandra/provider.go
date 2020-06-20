@@ -71,9 +71,9 @@ func Provider() terraform.ResourceProvider {
 				Required: true,
 			},
 			"host_filter": &schema.Schema{
-				Type: schema.TypeBool,
-				Optional: true,
-				Default: false,
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
 				Description: "Filter all incoming events for host. Hosts have to existing before using this provider",
 			},
 			"connection_timeout": &schema.Schema{
