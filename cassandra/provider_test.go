@@ -1,4 +1,4 @@
-package main
+package cassandra
 
 import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -33,7 +33,7 @@ func TestProvider_configure(t *testing.T) {
 	rc := terraform.NewResourceConfigRaw(map[string]interface{}{
 		"username": "cassanrda",
 		"password": "cassanrda",
-		"port":     "9042",
+		"port":     9042,
 		"hosts":    hosts,
 	})
 	p := Provider()

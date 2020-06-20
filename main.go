@@ -1,14 +1,10 @@
 package main
 
 import (
+	"github.com/bartoszj/terraform-provider-cassandra/cassandra"
 	"github.com/hashicorp/terraform-plugin-sdk/plugin"
-	"github.com/hashicorp/terraform-plugin-sdk/terraform"
 )
 
 func main() {
-	plugin.Serve(&plugin.ServeOpts{
-		ProviderFunc: func() terraform.ResourceProvider {
-			return Provider()
-		},
-	})
+	plugin.Serve(&plugin.ServeOpts{ProviderFunc: cassandra.Provider})
 }

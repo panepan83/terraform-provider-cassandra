@@ -1,4 +1,4 @@
-package main
+package cassandra
 
 import (
 	"crypto/sha256"
