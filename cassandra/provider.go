@@ -36,21 +36,21 @@ func Provider() terraform.ResourceProvider {
 			"username": &schema.Schema{
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
-				Description: "Cassandra Username",
+				DefaultFunc: schema.EnvDefaultFunc("CASSANDRA_USERNAME", ""),
+				Description: "Cassandra username",
 				Sensitive:   true,
 			},
 			"password": &schema.Schema{
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
-				Description: "Cassandra Password",
+				DefaultFunc: schema.EnvDefaultFunc("CASSANDRA_PASSWORD", ""),
+				Description: "Cassandra password",
 				Sensitive:   true,
 			},
 			"port": &schema.Schema{
 				Type:        schema.TypeInt,
 				Optional:    true,
-				Default:     9042,
+				DefaultFunc: schema.EnvDefaultFunc("CASSANDRA_PORT", 9042),
 				Description: "Cassandra CQL Port",
 				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
 					port := i.(int)
@@ -62,13 +62,21 @@ func Provider() terraform.ResourceProvider {
 					return
 				},
 			},
+			"host": &schema.Schema{
+				Type:         schema.TypeString,
+				DefaultFunc:  schema.EnvDefaultFunc("CASSANDRA_HOST", ""),
+				Description:  "Cassandra host",
+				Optional:     true,
+				ExactlyOneOf: []string{"host", "hosts"},
+			},
 			"hosts": &schema.Schema{
 				Type: schema.TypeList,
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
-				MinItems: 1,
-				Required: true,
+				MinItems:    1,
+				Optional:    true,
+				Description: "Cassandra hosts",
 			},
 			"host_filter": &schema.Schema{
 				Type:        schema.TypeBool,
@@ -149,7 +157,13 @@ func configureProvider(d *schema.ResourceData) (interface{}, error) {
 	log.Printf("Using use_ssl %v", useSSL)
 	log.Printf("Using username %s", username)
 
-	rawHosts := d.Get("hosts").([]interface{})
+	var rawHosts []interface{}
+
+	if rawHost, getHost := d.GetOk("host"); getHost == true {
+		rawHosts = []interface{}{rawHost}
+	} else {
+		rawHosts = d.Get("hosts").([]interface{})
+	}
 
 	hosts := make([]string, len(rawHosts))
 	hostFilter := d.Get("host_filter").(bool)

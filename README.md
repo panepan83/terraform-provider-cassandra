@@ -12,7 +12,7 @@ provider "cassandra" {
   username = "cluster_username"
   password = "cluster_password"
   port     = 9042
-  hosts    = ["localhost"]
+  host     = "localhost"
 }
 ```
 
@@ -20,19 +20,23 @@ provider "cassandra" {
 
 - `username`
   
-  Cassandra client username.
+  Cassandra client username. Default `CASSANDRA_USERNAME` environment variable.
 
 - `password`
   
-  Cassandra client password.
+  Cassandra client password. Default `CASSANDRA_PASSWORD` environment variable.
 
 - `port`
 
-  Cassandra client port. Default value is __9042__
+  Cassandra client port. Default `CASSANDRA_PORT` environment variable, default value is __9042__. 
+
+- `host`
+
+  Array of hosts pointing to nodes in the cassandra cluster. Default `CASSANDRA_HOST` environment variable.
 
 - `hosts`
 
-  Array of hosts pointing to nodes in the cassandra cluster
+  Array of hosts pointing to nodes in the cassandra cluster.
 
 - `host_filter`
 

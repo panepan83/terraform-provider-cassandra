@@ -136,7 +136,7 @@ func generateCreateOrUpdateKeyspaceQueryString(name string, create bool, replica
 	numberOfStrategyOptions := len(strategyOptions)
 
 	if numberOfStrategyOptions == 0 {
-		return "", fmt.Errorf("Must specify stratgey options - see https://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlCreateKeyspace.html")
+		return "", fmt.Errorf("must specify stratgey options - see https://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlCreateKeyspace.html")
 	}
 
 	query := fmt.Sprintf(`%s KEYSPACE %s WITH REPLICATION = { 'class' : '%s'`, boolToAction[create], name, replicationStrategy)
@@ -180,9 +180,15 @@ func resourceKeyspaceCreate(d *schema.ResourceData, meta interface{}) error {
 
 	defer session.Close()
 
+	err = session.Query(query).Exec()
+
+	if err != nil {
+		return err
+	}
+
 	d.SetId(name)
 
-	return session.Query(query).Exec()
+	return nil
 }
 
 func resourceKeyspaceRead(d *schema.ResourceData, meta interface{}) error {
