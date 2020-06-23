@@ -64,7 +64,7 @@ func Provider() terraform.ResourceProvider {
 			},
 			"host": &schema.Schema{
 				Type:         schema.TypeString,
-				DefaultFunc:  schema.EnvDefaultFunc("CASSANDRA_HOST", ""),
+				DefaultFunc:  schema.EnvDefaultFunc("CASSANDRA_HOST", nil),
 				Description:  "Cassandra host",
 				Optional:     true,
 				ExactlyOneOf: []string{"host", "hosts"},

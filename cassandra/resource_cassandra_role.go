@@ -28,6 +28,9 @@ func resourceCassandraRole() *schema.Resource {
 		Update: resourceRoleUpdate,
 		Delete: resourceRoleDelete,
 		Exists: resourceRoleExists,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{
 				Type:        schema.TypeString,
@@ -101,7 +104,7 @@ func readRole(session *gocql.Session, name string) (string, bool, bool, string, 
 }
 
 func resourceRoleExists(d *schema.ResourceData, meta interface{}) (b bool, e error) {
-	name := d.Get("name").(string)
+	name := d.Id()
 
 	cluster := meta.(*gocql.ClusterConfig)
 
@@ -165,11 +168,11 @@ func resourceRoleCreateOrUpdate(d *schema.ResourceData, meta interface{}, create
 	d.Set("login", login)
 	d.Set("password", password)
 
-	return nil
+	return resourceRoleRead(d, meta)
 }
 
 func resourceRoleRead(d *schema.ResourceData, meta interface{}) error {
-	name := d.Get("name").(string)
+	name := d.Id()
 	password := d.Get("password").(string)
 
 	cluster := meta.(*gocql.ClusterConfig)

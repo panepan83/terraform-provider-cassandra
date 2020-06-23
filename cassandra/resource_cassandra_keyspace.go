@@ -33,6 +33,9 @@ func resourceCassandraKeyspace() *schema.Resource {
 		Update: resourceKeyspaceUpdate,
 		Delete: resourceKeyspaceDelete,
 		Exists: resourceKeyspaceExists,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{
 				Type:        schema.TypeString,
@@ -105,7 +108,7 @@ func resourceCassandraKeyspace() *schema.Resource {
 }
 
 func resourceKeyspaceExists(d *schema.ResourceData, meta interface{}) (b bool, e error) {
-	name := d.Get("name").(string)
+	name := d.Id()
 
 	cluster := meta.(*gocql.ClusterConfig)
 
@@ -124,7 +127,9 @@ func resourceKeyspaceExists(d *schema.ResourceData, meta interface{}) (b bool, e
 	defer session.Close()
 	_, err := session.KeyspaceMetadata(name)
 
-	if err != nil {
+	if err == gocql.ErrKeyspaceDoesNotExist {
+		return false, nil
+	} else if err != nil {
 		return false, err
 	}
 
@@ -188,11 +193,11 @@ func resourceKeyspaceCreate(d *schema.ResourceData, meta interface{}) error {
 
 	d.SetId(name)
 
-	return nil
+	return resourceKeyspaceRead(d, meta)
 }
 
 func resourceKeyspaceRead(d *schema.ResourceData, meta interface{}) error {
-	name := d.Get("name").(string)
+	name := d.Id()
 
 	cluster := meta.(*gocql.ClusterConfig)
 
@@ -212,7 +217,10 @@ func resourceKeyspaceRead(d *schema.ResourceData, meta interface{}) error {
 
 	keyspaceMetadata, err := session.KeyspaceMetadata(name)
 
-	if err != nil {
+	if err == gocql.ErrKeyspaceDoesNotExist {
+		d.SetId("")
+		return nil
+	} else if err != nil {
 		return err
 	}
 
@@ -224,10 +232,10 @@ func resourceKeyspaceRead(d *schema.ResourceData, meta interface{}) error {
 
 	strategyClass := strings.TrimPrefix(keyspaceMetadata.StrategyClass, "org.apache.cassandra.locator.")
 
+	d.Set("name", name)
 	d.Set("replication_strategy", strategyClass)
 	d.Set("durable_writes", keyspaceMetadata.DurableWrites)
 	d.Set("strategy_options", strategyOptions)
-	d.SetId(name)
 
 	return nil
 }
@@ -282,5 +290,11 @@ func resourceKeyspaceUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	defer session.Close()
 
-	return session.Query(query).Exec()
+	err = session.Query(query).Exec()
+
+	if err != nil {
+		return err
+	}
+
+	return resourceKeyspaceRead(d, meta)
 }

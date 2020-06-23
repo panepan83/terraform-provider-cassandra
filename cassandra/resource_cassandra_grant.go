@@ -333,6 +333,10 @@ func resourceGrantExists(d *schema.ResourceData, meta interface{}) (b bool, e er
 
 	iterError := iter.Close()
 
+	if rowCount == 0 {
+		return false, nil
+	}
+
 	return rowCount > 0, iterError
 }
 
@@ -365,9 +369,15 @@ func resourceGrantCreate(d *schema.ResourceData, meta interface{}) error {
 
 	log.Printf("Executing query %v", query)
 
+	err = session.Query(query).Exec()
+
+	if err != nil {
+		return err
+	}
+
 	d.SetId(hash(fmt.Sprintf("%+v", grant)))
 
-	return session.Query(query).Exec()
+	return resourceGrantRead(d, meta)
 }
 
 func resourceGrantRead(d *schema.ResourceData, meta interface{}) error {
