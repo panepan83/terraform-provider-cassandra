@@ -1,16 +1,17 @@
 package cassandra
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
+	"github.com/hashicorp/go-cty/cty"
 	"log"
 	"time"
 
 	"github.com/gocql/gocql"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/terraform"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 var (
@@ -24,14 +25,14 @@ var (
 )
 
 // Provider returns a terraform.ResourceProvider
-func Provider() terraform.ResourceProvider {
+func Provider() *schema.Provider {
 	return &schema.Provider{
 		ResourcesMap: map[string]*schema.Resource{
 			"cassandra_keyspace": resourceCassandraKeyspace(),
 			"cassandra_role":     resourceCassandraRole(),
 			"cassandra_grant":    resourceCassandraGrant(),
 		},
-		ConfigureFunc: configureProvider,
+		ConfigureContextFunc: configureProvider,
 		Schema: map[string]*schema.Schema{
 			"username": &schema.Schema{
 				Type:        schema.TypeString,
@@ -142,7 +143,7 @@ func Provider() terraform.ResourceProvider {
 	}
 }
 
-func configureProvider(d *schema.ResourceData) (interface{}, error) {
+func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
 
 	log.Printf("Creating provider")
 
@@ -152,6 +153,7 @@ func configureProvider(d *schema.ResourceData) (interface{}, error) {
 	port := d.Get("port").(int)
 	connectionTimeout := d.Get("connection_timeout").(int)
 	protocolVersion := d.Get("protocol_version").(int)
+	diags := diag.Diagnostics{}
 
 	log.Printf("Using port %d", port)
 	log.Printf("Using use_ssl %v", useSSL)
@@ -215,7 +217,12 @@ func configureProvider(d *schema.ResourceData) (interface{}, error) {
 			ok := caPool.AppendCertsFromPEM([]byte(rootCA))
 
 			if !ok {
-				return nil, errors.New("Unable to load rootCA")
+				diags = append(diags, diag.Diagnostic{
+					Severity:      diag.Error,
+					Summary:       "Unable to load rootCA",
+					AttributePath: cty.Path{cty.GetAttrStep{Name: "root_ca"}},
+				})
+				return nil, diags
 			}
 
 			tlsConfig.RootCAs = caPool
@@ -226,5 +233,5 @@ func configureProvider(d *schema.ResourceData) (interface{}, error) {
 		}
 	}
 
-	return cluster, nil
+	return cluster, diags
 }

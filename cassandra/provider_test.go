@@ -1,32 +1,34 @@
 package cassandra
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/terraform"
+	"context"
 	"os"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
 var (
-	testAccProviders map[string]terraform.ResourceProvider
+	testAccProviders map[string]*schema.Provider
 	testAccProvider  *schema.Provider
 )
 
 func init() {
-	testAccProvider = Provider().(*schema.Provider)
-	testAccProviders = map[string]terraform.ResourceProvider{
+	testAccProvider = Provider()
+	testAccProviders = map[string]*schema.Provider{
 		"cassandra": testAccProvider,
 	}
 }
 
 func TestProvider(t *testing.T) {
-	if err := Provider().(*schema.Provider).InternalValidate(); err != nil {
+	if err := Provider().InternalValidate(); err != nil {
 		t.Fatalf("err: %s", err)
 	}
 }
 
 func TestProvider_impl(t *testing.T) {
-	var _ terraform.ResourceProvider = Provider()
+	var _ *schema.Provider = Provider()
 }
 
 func TestProvider_configure1(t *testing.T) {
@@ -37,7 +39,7 @@ func TestProvider_configure1(t *testing.T) {
 		"host":     "asdf",
 	})
 	p := Provider()
-	err := p.Configure(rc)
+	err := p.Configure(context.Background(), rc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +53,7 @@ func TestProvider_configure2(t *testing.T) {
 		"hosts":    []interface{}{"asd"},
 	})
 	p := Provider()
-	err := p.Configure(rc)
+	err := p.Configure(context.Background(), rc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +65,7 @@ func testAccPreCheck(t *testing.T) {
 		t.Fatal("CASSANDRA_HOST must be set for acceptance tests")
 	}
 
-	err := testAccProvider.Configure(terraform.NewResourceConfigRaw(nil))
+	err := testAccProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
