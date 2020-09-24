@@ -12,12 +12,12 @@ import (
 
 func TestAccCassandraKeyspace_basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCassandraKeyspaceDestroy,
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCassandraKeyspaceDestroy,
 		Steps: []resource.TestStep{
-			resource.TestStep{
-				Config: testAccCassandraKeyspaceConfig_basic,
+			{
+				Config: testAccCassandraKeyspaceConfigBasic,
 				Check: resource.ComposeTestCheckFunc(
 					testAccCassandraKeyspaceExists("cassandra_keyspace.keyspace"),
 					resource.TestCheckResourceAttr("cassandra_keyspace.keyspace", "name", "some_keyspace_name"),
@@ -31,19 +31,19 @@ func TestAccCassandraKeyspace_basic(t *testing.T) {
 
 func TestAccCassandraKeyspace_broken(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCassandraKeyspaceDestroy,
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCassandraKeyspaceDestroy,
 		Steps: []resource.TestStep{
-			resource.TestStep{
-				Config:      testAccCassandraKeyspaceConfig_broken,
+			{
+				Config:      testAccCassandraKeyspaceConfigBroken,
 				ExpectError: regexp.MustCompile(".*replication_factor is an option for SimpleStrategy, not NetworkTopologyStrategy.*"),
 			},
 		},
 	})
 }
 
-var testAccCassandraKeyspaceConfig_basic = fmt.Sprintf(`
+var testAccCassandraKeyspaceConfigBasic = fmt.Sprintf(`
 resource "cassandra_keyspace" "keyspace" {
 	name                 = "some_keyspace_name"
     replication_strategy = "SimpleStrategy"
@@ -53,7 +53,7 @@ resource "cassandra_keyspace" "keyspace" {
 }
 `)
 
-var testAccCassandraKeyspaceConfig_broken = fmt.Sprintf(`
+var testAccCassandraKeyspaceConfigBroken = fmt.Sprintf(`
 resource "cassandra_keyspace" "keyspace" {
 	name                 = "some_keyspace_name"
     replication_strategy = "NetworkTopologyStrategy"

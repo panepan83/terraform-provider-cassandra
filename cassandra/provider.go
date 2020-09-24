@@ -5,11 +5,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/hashicorp/go-cty/cty"
 	"log"
 	"time"
 
 	"github.com/gocql/gocql"
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -53,14 +53,21 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("CASSANDRA_PORT", 9042),
 				Description: "Cassandra CQL Port",
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					port := i.(int)
 
 					if port <= 0 || port >= 65535 {
-						errors = append(errors, fmt.Errorf("%d: invalid value - must be between 1 and 65535", port))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Invalid port number",
+								Detail:        fmt.Sprintf("%d: invalid value - must be between 1 and 65535", port),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 			},
 			"host": &schema.Schema{
@@ -95,21 +102,28 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "Use root CA to connect to Cluster. Applies only when useSSL is enabled",
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					rootCA := i.(string)
 
 					if rootCA == "" {
-						return
+						return nil
 					}
 
 					caPool := x509.NewCertPool()
 					ok := caPool.AppendCertsFromPEM([]byte(rootCA))
 
 					if !ok {
-						errors = append(errors, fmt.Errorf("%s: invalid PEM", rootCA))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Invalid PEM",
+								Detail:        fmt.Sprintf("%s: invalid PEM", rootCA),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 			},
 			"use_ssl": &schema.Schema{
@@ -123,14 +137,21 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				Default:     "TLS1.2",
 				Description: "Minimum TLS Version used to connect to the cluster - allowed values are SSL3.0, TLS1.0, TLS1.1, TLS1.2. Applies only when useSSL is enabled",
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					minTLSVersion := i.(string)
 
 					if allowedTLSProtocols[minTLSVersion] == 0 {
-						errors = append(errors, fmt.Errorf("%s: invalid value - must be one of SSL3.0, TLS1.0, TLS1.1, TLS1.2", minTLSVersion))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Invalid TLS",
+								Detail:        fmt.Sprintf("%s: invalid value - must be one of SSL3.0, TLS1.0, TLS1.1, TLS1.2", minTLSVersion),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 			},
 			"protocol_version": &schema.Schema{

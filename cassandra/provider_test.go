@@ -2,6 +2,7 @@ package cassandra
 
 import (
 	"context"
+	"log"
 	"os"
 	"testing"
 
@@ -10,14 +11,17 @@ import (
 )
 
 var (
-	testAccProviders map[string]*schema.Provider
-	testAccProvider  *schema.Provider
+	testAccProviderFactories map[string]func() (*schema.Provider, error)
+	testAccProvider          *schema.Provider
 )
 
 func init() {
 	testAccProvider = Provider()
-	testAccProviders = map[string]*schema.Provider{
-		"cassandra": testAccProvider,
+	testAccProviderFactories = map[string]func() (*schema.Provider, error){
+		"cassandra": func() (*schema.Provider, error) {
+			log.Printf("testAccProviderFactories: 1")
+			return testAccProvider, nil
+		},
 	}
 }
 
@@ -39,6 +43,10 @@ func TestProvider_configure1(t *testing.T) {
 		"host":     "asdf",
 	})
 	p := Provider()
+	v := p.Validate(rc)
+	if v.HasError() {
+		t.Fatal("Error during parsing")
+	}
 	err := p.Configure(context.Background(), rc)
 	if err != nil {
 		t.Fatal(err)
@@ -53,6 +61,10 @@ func TestProvider_configure2(t *testing.T) {
 		"hosts":    []interface{}{"asd"},
 	})
 	p := Provider()
+	v := p.Validate(rc)
+	if v.HasError() {
+		t.Fatal("Error during parsing")
+	}
 	err := p.Configure(context.Background(), rc)
 	if err != nil {
 		t.Fatal(err)

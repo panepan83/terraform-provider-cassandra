@@ -1,7 +1,10 @@
 package cassandra
 
 import (
+	"context"
 	"fmt"
+	"github.com/hashicorp/go-cty/cty"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"log"
 	"regexp"
 	"sort"
@@ -13,12 +16,12 @@ import (
 )
 
 const (
-	keyspaceliteralPattern = `^[a-zA-Z0-9][a-zA-Z0-9_]{0,48}$`
+	keyspaceLiteralPattern = `^[a-zA-Z0-9][a-zA-Z0-9_]{0,48}$`
 	strategyLiteralPatten  = `^SimpleStrategy|NetworkTopologyStrategy$`
 )
 
 var (
-	keyspaceRegex, _ = regexp.Compile(keyspaceliteralPattern)
+	keyspaceRegex, _ = regexp.Compile(keyspaceLiteralPattern)
 	strategyRegex, _ = regexp.Compile(strategyLiteralPatten)
 	boolToAction     = map[bool]string{
 		true:  "CREATE",
@@ -28,13 +31,12 @@ var (
 
 func resourceCassandraKeyspace() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceKeyspaceCreate,
-		Read:   resourceKeyspaceRead,
-		Update: resourceKeyspaceUpdate,
-		Delete: resourceKeyspaceDelete,
-		Exists: resourceKeyspaceExists,
+		CreateContext: resourceKeyspaceCreate,
+		ReadContext:   resourceKeyspaceRead,
+		UpdateContext: resourceKeyspaceUpdate,
+		DeleteContext: resourceKeyspaceDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{
@@ -42,18 +44,32 @@ func resourceCassandraKeyspace() *schema.Resource {
 				Required:    true,
 				ForceNew:    true,
 				Description: "Name of keyspace",
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					name := i.(string)
 
 					if !keyspaceRegex.MatchString(name) {
-						errors = append(errors, fmt.Errorf("%s: invalid keyspace name - must match %s", name, keyspaceliteralPattern))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Invalid keyspace",
+								Detail:        fmt.Sprintf("%s: invalid keyspace name - must match %s", name, keyspaceLiteralPattern),
+								AttributePath: path,
+							},
+						}
 					}
 
 					if name == "system" {
-						errors = append(errors, fmt.Errorf("cannot manage system keyspace, it is internal to Cassandra"))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Cannot manage system keyspace",
+								Detail:        fmt.Sprintf("cannot manage system keyspace, it is internal to Cassandra"),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 			},
 			"replication_strategy": &schema.Schema{
@@ -61,14 +77,21 @@ func resourceCassandraKeyspace() *schema.Resource {
 				Required:    true,
 				ForceNew:    false,
 				Description: "Keyspace replication strategy - must be one of SimpleStrategy or NetworkTopologyStrategy",
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					strategy := i.(string)
 
 					if !strategyRegex.MatchString(strategy) {
-						errors = append(errors, fmt.Errorf("%s: invalid replication strategy - must match %s", strategy, strategyLiteralPatten))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Invalid replication strategy",
+								Detail:        fmt.Sprintf("%s: invalid replication strategy - must match %s", strategy, strategyLiteralPatten),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 			},
 			"strategy_options": &schema.Schema{
@@ -107,35 +130,6 @@ func resourceCassandraKeyspace() *schema.Resource {
 	}
 }
 
-func resourceKeyspaceExists(d *schema.ResourceData, meta interface{}) (b bool, e error) {
-	name := d.Id()
-
-	cluster := meta.(*gocql.ClusterConfig)
-
-	start := time.Now()
-
-	session, sessionCreateError := cluster.CreateSession()
-
-	elapsed := time.Since(start)
-
-	log.Printf("Getting a session took %s", elapsed)
-
-	if sessionCreateError != nil {
-		return false, sessionCreateError
-	}
-
-	defer session.Close()
-	_, err := session.KeyspaceMetadata(name)
-
-	if err == gocql.ErrKeyspaceDoesNotExist {
-		return false, nil
-	} else if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
 func generateCreateOrUpdateKeyspaceQueryString(name string, create bool, replicationStrategy string, strategyOptions map[string]interface{}, durableWrites bool) (string, error) {
 
 	numberOfStrategyOptions := len(strategyOptions)
@@ -157,7 +151,7 @@ func generateCreateOrUpdateKeyspaceQueryString(name string, create bool, replica
 	return query, nil
 }
 
-func resourceKeyspaceCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceKeyspaceCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Get("name").(string)
 	replicationStrategy := d.Get("replication_strategy").(string)
 	strategyOptions := d.Get("strategy_options").(map[string]interface{})
@@ -166,7 +160,7 @@ func resourceKeyspaceCreate(d *schema.ResourceData, meta interface{}) error {
 	query, err := generateCreateOrUpdateKeyspaceQueryString(name, true, replicationStrategy, strategyOptions, durableWrites)
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	cluster := meta.(*gocql.ClusterConfig)
@@ -180,7 +174,7 @@ func resourceKeyspaceCreate(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
-		return sessionCreateError
+		return diag.FromErr(sessionCreateError)
 	}
 
 	defer session.Close()
@@ -188,15 +182,15 @@ func resourceKeyspaceCreate(d *schema.ResourceData, meta interface{}) error {
 	err = session.Query(query).Exec()
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	d.SetId(name)
 
-	return resourceKeyspaceRead(d, meta)
+	return resourceKeyspaceRead(ctx, d, meta)
 }
 
-func resourceKeyspaceRead(d *schema.ResourceData, meta interface{}) error {
+func resourceKeyspaceRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Id()
 
 	cluster := meta.(*gocql.ClusterConfig)
@@ -210,7 +204,7 @@ func resourceKeyspaceRead(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
-		return sessionCreateError
+		return diag.FromErr(sessionCreateError)
 	}
 
 	defer session.Close()
@@ -221,7 +215,7 @@ func resourceKeyspaceRead(d *schema.ResourceData, meta interface{}) error {
 		d.SetId("")
 		return nil
 	} else if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	strategyOptions := make(map[string]string)
@@ -240,7 +234,7 @@ func resourceKeyspaceRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceKeyspaceDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceKeyspaceDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Get("name").(string)
 
 	cluster := meta.(*gocql.ClusterConfig)
@@ -254,15 +248,20 @@ func resourceKeyspaceDelete(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
-		return sessionCreateError
+		return diag.FromErr(sessionCreateError)
 	}
 
 	defer session.Close()
 
-	return session.Query(fmt.Sprintf(`DROP KEYSPACE %s`, name)).Exec()
+	err := session.Query(fmt.Sprintf(`DROP KEYSPACE %s`, name)).Exec()
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	return nil
 }
 
-func resourceKeyspaceUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceKeyspaceUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Get("name").(string)
 	replicationStrategy := d.Get("replication_strategy").(string)
 	strategyOptions := d.Get("strategy_options").(map[string]interface{})
@@ -271,7 +270,7 @@ func resourceKeyspaceUpdate(d *schema.ResourceData, meta interface{}) error {
 	query, err := generateCreateOrUpdateKeyspaceQueryString(name, false, replicationStrategy, strategyOptions, durableWrites)
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	cluster := meta.(*gocql.ClusterConfig)
@@ -285,7 +284,7 @@ func resourceKeyspaceUpdate(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
-		return sessionCreateError
+		return diag.FromErr(sessionCreateError)
 	}
 
 	defer session.Close()
@@ -293,8 +292,8 @@ func resourceKeyspaceUpdate(d *schema.ResourceData, meta interface{}) error {
 	err = session.Query(query).Exec()
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	return resourceKeyspaceRead(d, meta)
+	return resourceKeyspaceRead(ctx, d, meta)
 }
