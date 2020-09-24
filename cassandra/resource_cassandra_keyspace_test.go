@@ -11,57 +11,71 @@ import (
 )
 
 func TestAccCassandraKeyspace_basic(t *testing.T) {
+	keyspace := "some_keyspace"
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: testAccProviderFactories,
 		CheckDestroy:      testAccCassandraKeyspaceDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCassandraKeyspaceConfigBasic,
+				Config: testAccCassandraKeyspaceConfigBasic(keyspace),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCassandraKeyspaceExists("cassandra_keyspace.keyspace"),
-					resource.TestCheckResourceAttr("cassandra_keyspace.keyspace", "name", "some_keyspace_name"),
+					resource.TestCheckResourceAttr("cassandra_keyspace.keyspace", "name", keyspace),
 					resource.TestCheckResourceAttr("cassandra_keyspace.keyspace", "replication_strategy", "SimpleStrategy"),
 					resource.TestCheckResourceAttr("cassandra_keyspace.keyspace", "strategy_options.replication_factor", "1"),
 				),
+			},
+			{
+				ResourceName:      "cassandra_keyspace.keyspace",
+				ImportStateId:     keyspace,
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})
 }
 
 func TestAccCassandraKeyspace_broken(t *testing.T) {
+	keyspace := "some_keyspace"
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: testAccProviderFactories,
 		CheckDestroy:      testAccCassandraKeyspaceDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccCassandraKeyspaceConfigBroken,
+				Config:      testAccCassandraKeyspaceConfigBroken(keyspace),
 				ExpectError: regexp.MustCompile(".*replication_factor is an option for SimpleStrategy, not NetworkTopologyStrategy.*"),
 			},
 		},
 	})
 }
 
-var testAccCassandraKeyspaceConfigBasic = fmt.Sprintf(`
+func testAccCassandraKeyspaceConfigBasic(keyspace string) string {
+	return fmt.Sprintf(`
 resource "cassandra_keyspace" "keyspace" {
-	name                 = "some_keyspace_name"
+	name                 = "%s"
     replication_strategy = "SimpleStrategy"
     strategy_options     = {
       replication_factor = 1
     }
 }
-`)
+`, keyspace)
+}
 
-var testAccCassandraKeyspaceConfigBroken = fmt.Sprintf(`
+func testAccCassandraKeyspaceConfigBroken(keyspace string) string {
+	return fmt.Sprintf(`
 resource "cassandra_keyspace" "keyspace" {
-	name                 = "some_keyspace_name"
+	name                 = "%s"
     replication_strategy = "NetworkTopologyStrategy"
     strategy_options     = {
       replication_factor = 1
     }
 }
-`)
+`, keyspace)
+}
 
 func testAccCassandraKeyspaceDestroy(s *terraform.State) error {
 	cluster := testAccProvider.Meta().(*gocql.ClusterConfig)

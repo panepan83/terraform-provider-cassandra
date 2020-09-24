@@ -156,6 +156,7 @@ func resourceKeyspaceCreate(ctx context.Context, d *schema.ResourceData, meta in
 	replicationStrategy := d.Get("replication_strategy").(string)
 	strategyOptions := d.Get("strategy_options").(map[string]interface{})
 	durableWrites := d.Get("durable_writes").(bool)
+	var diags diag.Diagnostics
 
 	query, err := generateCreateOrUpdateKeyspaceQueryString(name, true, replicationStrategy, strategyOptions, durableWrites)
 
@@ -187,18 +188,18 @@ func resourceKeyspaceCreate(ctx context.Context, d *schema.ResourceData, meta in
 
 	d.SetId(name)
 
-	return resourceKeyspaceRead(ctx, d, meta)
+	resourceKeyspaceRead(ctx, d, meta)
+
+	return diags
 }
 
 func resourceKeyspaceRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Id()
-
 	cluster := meta.(*gocql.ClusterConfig)
+	var diags diag.Diagnostics
 
 	start := time.Now()
-
 	session, sessionCreateError := cluster.CreateSession()
-
 	elapsed := time.Since(start)
 
 	log.Printf("Getting a session took %s", elapsed)
@@ -231,18 +232,16 @@ func resourceKeyspaceRead(ctx context.Context, d *schema.ResourceData, meta inte
 	d.Set("durable_writes", keyspaceMetadata.DurableWrites)
 	d.Set("strategy_options", strategyOptions)
 
-	return nil
+	return diags
 }
 
 func resourceKeyspaceDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Get("name").(string)
-
 	cluster := meta.(*gocql.ClusterConfig)
+	var diags diag.Diagnostics
 
 	start := time.Now()
-
 	session, sessionCreateError := cluster.CreateSession()
-
 	elapsed := time.Since(start)
 
 	log.Printf("Getting a session took %s", elapsed)
@@ -258,7 +257,7 @@ func resourceKeyspaceDelete(ctx context.Context, d *schema.ResourceData, meta in
 		return diag.FromErr(err)
 	}
 
-	return nil
+	return diags
 }
 
 func resourceKeyspaceUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
