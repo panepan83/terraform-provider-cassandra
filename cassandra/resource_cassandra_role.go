@@ -1,12 +1,15 @@
 package cassandra
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"regexp"
 	"time"
 
 	"github.com/gocql/gocql"
+	"github.com/hashicorp/go-cty/cty"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -23,13 +26,12 @@ var (
 
 func resourceCassandraRole() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceRoleCreate,
-		Read:   resourceRoleRead,
-		Update: resourceRoleUpdate,
-		Delete: resourceRoleDelete,
-		Exists: resourceRoleExists,
+		CreateContext: resourceRoleCreate,
+		ReadContext:   resourceRoleRead,
+		UpdateContext: resourceRoleUpdate,
+		DeleteContext: resourceRoleDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{
@@ -37,14 +39,21 @@ func resourceCassandraRole() *schema.Resource {
 				Required:    true,
 				ForceNew:    true,
 				Description: "Name of role - must contain between 1 and 256 characters",
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					name := i.(string)
 
 					if !validRoleRegex.MatchString(name) {
-						errors = append(errors, fmt.Errorf("name must contain between 1 and 256 chars and must not contain single quote character"))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Invalid role name",
+								Detail:        fmt.Sprintf("name must contain between 1 and 256 chars and must not contain single quote character"),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 			},
 			"super_user": &schema.Schema{
@@ -67,14 +76,21 @@ func resourceCassandraRole() *schema.Resource {
 				ForceNew:    false,
 				Description: "Password for user when using Cassandra internal authentication",
 				Sensitive:   true,
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					password := i.(string)
 
 					if !validPasswordRegex.MatchString(password) {
-						errors = append(errors, fmt.Errorf("password must contain between 40 and 512 chars and must not contain single quote character"))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Incorrect role password",
+								Detail:        fmt.Sprintf("password must contain between 40 and 512 chars and must not contain single quote character"),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 			},
 		},
@@ -103,63 +119,29 @@ func readRole(session *gocql.Session, name string) (string, bool, bool, string, 
 	return "", false, false, "", nil
 }
 
-func resourceRoleExists(d *schema.ResourceData, meta interface{}) (b bool, e error) {
-	name := d.Id()
-
-	cluster := meta.(*gocql.ClusterConfig)
-
-	start := time.Now()
-
-	session, sessionCreateError := cluster.CreateSession()
-
-	elapsed := time.Since(start)
-
-	log.Printf("Getting a session took %s", elapsed)
-
-	if sessionCreateError != nil {
-		return false, sessionCreateError
-	}
-
-	defer session.Close()
-
-	_name, _, _, _, err := readRole(session, name)
-
-	condition := _name == name && err == nil
-
-	log.Printf("name = %s, _name = %s, err = %v, condition = %v", name, _name, err, condition)
-
-	return condition, err
-}
-
-func resourceRoleCreate(d *schema.ResourceData, meta interface{}) error {
-	return resourceRoleCreateOrUpdate(d, meta, true)
-}
-
-func resourceRoleCreateOrUpdate(d *schema.ResourceData, meta interface{}, createRole bool) error {
+func resourceRoleCreateOrUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}, createRole bool) diag.Diagnostics {
 	name := d.Get("name").(string)
 	superUser := d.Get("super_user").(bool)
 	login := d.Get("login").(bool)
 	password := d.Get("password").(string)
+	var diags diag.Diagnostics
 
 	cluster := meta.(*gocql.ClusterConfig)
-
 	start := time.Now()
-
 	session, sessionCreateError := cluster.CreateSession()
-
 	elapsed := time.Since(start)
 
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
-		return sessionCreateError
+		return diag.FromErr(sessionCreateError)
 	}
 
 	defer session.Close()
 
 	createErr := session.Query(fmt.Sprintf(`%s ROLE '%s' WITH PASSWORD = '%s' AND LOGIN = %v AND SUPERUSER = %v`, boolToAction[createRole], name, password, login, superUser)).Exec()
 	if createErr != nil {
-		return createErr
+		return diag.FromErr(createErr)
 	}
 
 	d.SetId(name)
@@ -168,32 +150,36 @@ func resourceRoleCreateOrUpdate(d *schema.ResourceData, meta interface{}, create
 	d.Set("login", login)
 	d.Set("password", password)
 
-	return resourceRoleRead(d, meta)
+	diags = append(diags, resourceRoleRead(ctx, d, meta)...)
+
+	return diags
 }
 
-func resourceRoleRead(d *schema.ResourceData, meta interface{}) error {
+func resourceRoleCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return resourceRoleCreateOrUpdate(ctx, d, meta, true)
+}
+
+func resourceRoleRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Id()
 	password := d.Get("password").(string)
+	var diags diag.Diagnostics
 
 	cluster := meta.(*gocql.ClusterConfig)
-
 	start := time.Now()
-
 	session, sessionCreateError := cluster.CreateSession()
-
 	elapsed := time.Since(start)
 
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
-		return sessionCreateError
+		return diag.FromErr(sessionCreateError)
 	}
 
 	defer session.Close()
 	_name, login, superUser, saltedHash, readRoleErr := readRole(session, name)
 
 	if readRoleErr != nil {
-		return readRoleErr
+		return diag.FromErr(readRoleErr)
 	}
 
 	result := bcrypt.CompareHashAndPassword([]byte(saltedHash), []byte(password))
@@ -210,31 +196,34 @@ func resourceRoleRead(d *schema.ResourceData, meta interface{}) error {
 		d.Set("password", saltedHash)
 	}
 
-	return nil
+	return diags
 }
 
-func resourceRoleDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceRoleDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	name := d.Get("name").(string)
+	var diags diag.Diagnostics
 
 	cluster := meta.(*gocql.ClusterConfig)
-
 	start := time.Now()
-
 	session, sessionCreateError := cluster.CreateSession()
-
 	elapsed := time.Since(start)
 
 	log.Printf("Getting a session took %s", elapsed)
 
 	if sessionCreateError != nil {
-		return sessionCreateError
+		return diag.FromErr(sessionCreateError)
 	}
 
 	defer session.Close()
 
-	return session.Query(fmt.Sprintf(`DROP ROLE '%s'`, name)).Exec()
+	err := session.Query(fmt.Sprintf(`DROP ROLE '%s'`, name)).Exec()
+	if err != nil {
+		diag.FromErr(err)
+	}
+
+	return diags
 }
 
-func resourceRoleUpdate(d *schema.ResourceData, meta interface{}) error {
-	return resourceRoleCreateOrUpdate(d, meta, false)
+func resourceRoleUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return resourceRoleCreateOrUpdate(ctx, d, meta, false)
 }

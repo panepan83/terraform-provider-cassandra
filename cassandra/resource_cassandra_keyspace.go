@@ -3,8 +3,6 @@ package cassandra
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/go-cty/cty"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"log"
 	"regexp"
 	"sort"
@@ -12,6 +10,8 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
+	"github.com/hashicorp/go-cty/cty"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -51,7 +51,7 @@ func resourceCassandraKeyspace() *schema.Resource {
 						return diag.Diagnostics{
 							{
 								Severity:      diag.Error,
-								Summary:       "Invalid keyspace",
+								Summary:       "Invalid keyspace name",
 								Detail:        fmt.Sprintf("%s: invalid keyspace name - must match %s", name, keyspaceLiteralPattern),
 								AttributePath: path,
 							},
@@ -165,11 +165,8 @@ func resourceKeyspaceCreate(ctx context.Context, d *schema.ResourceData, meta in
 	}
 
 	cluster := meta.(*gocql.ClusterConfig)
-
 	start := time.Now()
-
 	session, sessionCreateError := cluster.CreateSession()
-
 	elapsed := time.Since(start)
 
 	log.Printf("Getting a session took %s", elapsed)
@@ -188,7 +185,7 @@ func resourceKeyspaceCreate(ctx context.Context, d *schema.ResourceData, meta in
 
 	d.SetId(name)
 
-	resourceKeyspaceRead(ctx, d, meta)
+	diags = append(diags, resourceKeyspaceRead(ctx, d, meta)...)
 
 	return diags
 }
@@ -265,6 +262,7 @@ func resourceKeyspaceUpdate(ctx context.Context, d *schema.ResourceData, meta in
 	replicationStrategy := d.Get("replication_strategy").(string)
 	strategyOptions := d.Get("strategy_options").(map[string]interface{})
 	durableWrites := d.Get("durable_writes").(bool)
+	var diags diag.Diagnostics
 
 	query, err := generateCreateOrUpdateKeyspaceQueryString(name, false, replicationStrategy, strategyOptions, durableWrites)
 
@@ -273,11 +271,8 @@ func resourceKeyspaceUpdate(ctx context.Context, d *schema.ResourceData, meta in
 	}
 
 	cluster := meta.(*gocql.ClusterConfig)
-
 	start := time.Now()
-
 	session, sessionCreateError := cluster.CreateSession()
-
 	elapsed := time.Since(start)
 
 	log.Printf("Getting a session took %s", elapsed)
@@ -294,5 +289,7 @@ func resourceKeyspaceUpdate(ctx context.Context, d *schema.ResourceData, meta in
 		return diag.FromErr(err)
 	}
 
-	return resourceKeyspaceRead(ctx, d, meta)
+	diags = append(diags, resourceKeyspaceRead(ctx, d, meta)...)
+
+	return diags
 }
