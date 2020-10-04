@@ -116,7 +116,7 @@ func readRole(session *gocql.Session, name string) (string, bool, bool, string, 
 		return role, canLogin, isSuperUser, saltedHash, nil
 	}
 
-	return "", false, false, "", nil
+	return "", false, false, "", fmt.Errorf("cannot read role with name %s", name)
 }
 
 func resourceRoleCreateOrUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}, createRole bool) diag.Diagnostics {

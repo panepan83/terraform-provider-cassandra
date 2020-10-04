@@ -56,7 +56,7 @@ func TestAccCassandraKeyspace_broken(t *testing.T) {
 func testAccCassandraKeyspaceConfigBasic(keyspace string) string {
 	return fmt.Sprintf(`
 resource "cassandra_keyspace" "keyspace" {
-	name                 = "%s"
+    name                 = "%s"
     replication_strategy = "SimpleStrategy"
     strategy_options     = {
       replication_factor = 1
@@ -68,7 +68,7 @@ resource "cassandra_keyspace" "keyspace" {
 func testAccCassandraKeyspaceConfigBroken(keyspace string) string {
 	return fmt.Sprintf(`
 resource "cassandra_keyspace" "keyspace" {
-	name                 = "%s"
+    name                 = "%s"
     replication_strategy = "NetworkTopologyStrategy"
     strategy_options     = {
       replication_factor = 1
