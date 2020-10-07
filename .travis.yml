@@ -4,7 +4,7 @@ services:
   - docker
 language: go
 go:
-  - "1.14.x"
+  - "1.15.x"
 
 env:
   - CASSANDRA_HOST=localhost CASSANDRA_USERNAME=cassandra CASSANDRA_PASSWORD=cassandra CASSANDRA_VERSION=2
