@@ -2,6 +2,7 @@ package cassandra
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html/template"
 	"log"
@@ -9,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/gocql/gocql"
+	"github.com/hashicorp/go-cty/cty"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -110,23 +113,29 @@ type Grant struct {
 	Identifier   string
 }
 
-func validIdentifier(i interface{}, s string, identifierName string, regularExpression *regexp.Regexp) (ws []string, errors []error) {
+func validIdentifier(i interface{}, path cty.Path, identifierName string, regularExpression *regexp.Regexp) diag.Diagnostics {
 	identifier := i.(string)
 
 	if identifierName != "" && !regularExpression.MatchString(identifier) {
-		errors = append(errors, fmt.Errorf("%s in not a valid %s name", identifier, identifierName))
+		return diag.Diagnostics{
+			{
+				Severity:      diag.Error,
+				Summary:       "Not valid value",
+				Detail:        fmt.Sprintf("%s in not a valid %s name", identifier, identifierName),
+				AttributePath: path,
+			},
+		}
 	}
 
-	return
+	return nil
 }
 
 func resourceCassandraGrant() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceGrantCreate,
-		Read:   resourceGrantRead,
-		Update: resourceGrantUpdate,
-		Delete: resourceGrantDelete,
-		Exists: resourceGrantExists,
+		CreateContext: resourceGrantCreate,
+		ReadContext:   resourceGrantRead,
+		UpdateContext: resourceGrantUpdate,
+		DeleteContext: resourceGrantDelete,
 		Schema: map[string]*schema.Schema{
 			identifierPrivilege: &schema.Schema{
 				Type:        schema.TypeString,
@@ -134,14 +143,21 @@ func resourceCassandraGrant() *schema.Resource {
 				ForceNew:    true,
 				Description: fmt.Sprintf("One of %s", strings.Join(allPrivileges, ", ")),
 
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					privilege := i.(string)
 
 					if len(privilegeToResourceTypesMap[privilege]) <= 0 {
-						errors = append(errors, fmt.Errorf("%s not one of %s", privilege, strings.Join(allPrivileges, ", ")))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Invalid privilege",
+								Detail:        fmt.Sprintf("%s not one of %s", privilege, strings.Join(allPrivileges, ", ")),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 			},
 			identifierGrantee: &schema.Schema{
@@ -149,8 +165,8 @@ func resourceCassandraGrant() *schema.Resource {
 				Required:    true,
 				ForceNew:    true,
 				Description: "role name who we are granting privilege(s) to",
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
-					return validIdentifier(i, s, "grantee", validRoleRegex)
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
+					return validIdentifier(i, path, "grantee", validRoleRegex)
 				},
 			},
 			identifierResourceType: &schema.Schema{
@@ -158,14 +174,22 @@ func resourceCassandraGrant() *schema.Resource {
 				Required:    true,
 				ForceNew:    true,
 				Description: fmt.Sprintf("Resource type we are granting privilege to. Must be one of %s", strings.Join(allResources, ", ")),
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					resourceType := i.(string)
 
 					if !validResources[resourceType] {
-						errors = append(errors, fmt.Errorf("%s in not a valid resourceType, must be one of %s", resourceType, strings.Join(allResources, ", ")))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Not valid resource type",
+								Detail:        fmt.Sprintf("%s in not a valid resourceType, must be one of %s", resourceType, strings.Join(allResources, ", ")),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 			},
 			identifierKeyspaceName: &schema.Schema{
@@ -173,14 +197,22 @@ func resourceCassandraGrant() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: fmt.Sprintf("keyspace qualifier to the resource, only applicable for resource %s", strings.Join(resourcesThatRequireKeyspaceQualifier, ", ")),
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					keyspaceName := i.(string)
 
 					if !keyspaceRegex.MatchString(keyspaceName) {
-						errors = append(errors, fmt.Errorf("%s in not a valid keyspace name", keyspaceName))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Not valid keyspace name",
+								Detail:        fmt.Sprintf("%s in not a valid keyspace name", keyspaceName),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 				ConflictsWith: []string{identifierRoleName, identifierMbeanName, identifierMbeanPattern},
 			},
@@ -188,8 +220,8 @@ func resourceCassandraGrant() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: fmt.Sprintf("keyspace qualifier to the resource, only applicable for resource %s", strings.Join(resourcesThatRequireKeyspaceQualifier, ", ")),
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
-					return validIdentifier(i, s, "function name", validIdentifierRegex)
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
+					return validIdentifier(i, path, "function name", validIdentifierRegex)
 				},
 				ConflictsWith: []string{identifierTableName, identifierRoleName, identifierMbeanName, identifierMbeanPattern},
 			},
@@ -198,8 +230,8 @@ func resourceCassandraGrant() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: fmt.Sprintf("name of the table, applicable only for resource %s", resourceTable),
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
-					return validIdentifier(i, s, "table name", validTableNameRegex)
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
+					return validIdentifier(i, path, "table name", validTableNameRegex)
 				},
 				ConflictsWith: []string{identifierFunctionName, identifierRoleName, identifierMbeanName, identifierMbeanPattern},
 			},
@@ -208,8 +240,8 @@ func resourceCassandraGrant() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: fmt.Sprintf("name of the role, applicable only for resource %s", resourceRole),
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
-					return validIdentifier(i, s, "role name", validRoleRegex)
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
+					return validIdentifier(i, path, "role name", validRoleRegex)
 				},
 				ConflictsWith: []string{identifierFunctionName, identifierTableName, identifierMbeanName, identifierMbeanPattern, identifierKeyspaceName},
 			},
@@ -218,8 +250,8 @@ func resourceCassandraGrant() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: fmt.Sprintf("name of mbean, only applicable for resource %s", resourceMbean),
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
-					return validIdentifier(i, s, "mbean name", validIdentifierRegex)
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
+					return validIdentifier(i, path, "mbean name", validIdentifierRegex)
 				},
 				ConflictsWith: []string{identifierFunctionName, identifierTableName, identifierRoleName, identifierMbeanPattern, identifierKeyspaceName},
 			},
@@ -228,16 +260,24 @@ func resourceCassandraGrant() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: fmt.Sprintf("pattern for selecting mbeans, only valid for resource %s", resourceMbeans),
-				ValidateFunc: func(i interface{}, s string) (ws []string, errors []error) {
+
+				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
 					mbeanPatternRaw := i.(string)
 
 					_, err := regexp.Compile(mbeanPatternRaw)
 
 					if err != nil {
-						errors = append(errors, fmt.Errorf("%s in not a valid pattern", mbeanPatternRaw))
+						return diag.Diagnostics{
+							{
+								Severity:      diag.Error,
+								Summary:       "Not valid mbean",
+								Detail:        fmt.Sprintf("%s in not a valid pattern", mbeanPatternRaw),
+								AttributePath: path,
+							},
+						}
 					}
 
-					return
+					return nil
 				},
 				ConflictsWith: []string{identifierFunctionName, identifierTableName, identifierRoleName, identifierMbeanName, identifierKeyspaceName},
 			},
@@ -340,19 +380,19 @@ func resourceGrantExists(d *schema.ResourceData, meta interface{}) (b bool, e er
 	return rowCount > 0, iterError
 }
 
-func resourceGrantCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceGrantCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	grant, err := parseData(d)
+	var diags diag.Diagnostics
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	cluster := meta.(*gocql.ClusterConfig)
-
 	session, sessionCreationError := cluster.CreateSession()
 
 	if sessionCreationError != nil {
-		return sessionCreationError
+		return diag.FromErr(sessionCreationError)
 	}
 
 	defer session.Close()
@@ -362,7 +402,7 @@ func resourceGrantCreate(d *schema.ResourceData, meta interface{}) error {
 	templateRenderError := templateCreate.Execute(&buffer, grant)
 
 	if templateRenderError != nil {
-		return templateRenderError
+		return diag.FromErr(templateRenderError)
 	}
 
 	query := buffer.String()
@@ -372,29 +412,32 @@ func resourceGrantCreate(d *schema.ResourceData, meta interface{}) error {
 	err = session.Query(query).Exec()
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	d.SetId(hash(fmt.Sprintf("%+v", grant)))
 
-	return resourceGrantRead(d, meta)
+	diags = append(diags, resourceGrantRead(ctx, d, meta)...)
+
+	return diags
 }
 
-func resourceGrantRead(d *schema.ResourceData, meta interface{}) error {
+func resourceGrantRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	exists, err := resourceGrantExists(d, meta)
+	var diags diag.Diagnostics
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if !exists {
-		return fmt.Errorf("Grant does not exist")
+		return diag.Errorf("Grant does not exist")
 	}
 
 	grant, err := parseData(d)
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	d.Set(identifierResourceType, grant.ResourceType)
@@ -411,14 +454,15 @@ func resourceGrantRead(d *schema.ResourceData, meta interface{}) error {
 		d.Set(identifierName, grant.Identifier)
 	}
 
-	return nil
+	return diags
 }
 
-func resourceGrantDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceGrantDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	grant, err := parseData(d)
+	var diags diag.Diagnostics
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	var buffer bytes.Buffer
@@ -426,7 +470,7 @@ func resourceGrantDelete(d *schema.ResourceData, meta interface{}) error {
 	err = templateDelete.Execute(&buffer, grant)
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	cluster := meta.(*gocql.ClusterConfig)
@@ -434,16 +478,21 @@ func resourceGrantDelete(d *schema.ResourceData, meta interface{}) error {
 	session, err := cluster.CreateSession()
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	query := buffer.String()
 
 	defer session.Close()
 
-	return session.Query(query).Exec()
+	err = session.Query(query).Exec()
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	return diags
 }
 
-func resourceGrantUpdate(d *schema.ResourceData, meta interface{}) error {
-	return fmt.Errorf("Updating of grants is not supported")
+func resourceGrantUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return diag.Errorf("Updating of grants is not supported")
 }
