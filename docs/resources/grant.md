@@ -1,4 +1,4 @@
-# `grant` Resource
+# cassandra_grant
 
 Grants permissions to a role.
 

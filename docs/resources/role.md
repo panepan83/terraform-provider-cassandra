@@ -1,4 +1,4 @@
-# <resource name> Resource/Data Source
+# cassandra_role
 
 Creates a role.
 

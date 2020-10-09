@@ -1,4 +1,4 @@
-# `keyspace` Resource
+# cassandra_keyspace
 
 Creates a keyspace.
 
