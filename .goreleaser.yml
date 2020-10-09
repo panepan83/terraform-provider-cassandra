@@ -31,7 +31,7 @@ signs:
   - artifacts: checksum
     args:
       - "--local-user"
-      - "804DBECD"
+      - "{{ .Env.GPG_FINGERPRINT }}"
       - "--output"
       - "${signature}"
       - "--detach-sign"
