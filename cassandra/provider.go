@@ -160,6 +160,12 @@ func Provider() *schema.Provider {
 				Default:     4,
 				Description: "CQL Binary Protocol Version",
 			},
+			"consistency": &schema.Schema{
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     gocql.Quorum.String(),
+				Description: "CQL Binary Protocol Version",
+			},
 		},
 	}
 }
@@ -216,7 +222,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 
 	cluster.Keyspace = "system"
 
-	cluster.Consistency = 0x06
+	cluster.Consistency = resolveConsistency(d.Get("consistency").(string))
 
 	cluster.ProtoVersion = protocolVersion
 
@@ -257,4 +263,31 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	return cluster, diags
+}
+
+func resolveConsistency(c string) gocql.Consistency {
+	switch string(c) {
+	case "ANY":
+		return gocql.Any
+	case "ONE":
+		return gocql.One
+	case "TWO":
+		return gocql.Two
+	case "THREE":
+		return gocql.Three
+	case "QUORUM":
+		return gocql.Quorum
+	case "ALL":
+		return gocql.All
+	case "LOCAL_QUORUM":
+		return gocql.LocalQuorum
+	case "EACH_QUORUM":
+		return gocql.EachQuorum
+	case "LOCAL_ONE":
+		return gocql.LocalOne
+	default:
+		return gocql.Quorum
+	}
+
+	return gocql.Quorum
 }

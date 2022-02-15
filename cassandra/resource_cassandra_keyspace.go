@@ -17,7 +17,7 @@ import (
 
 const (
 	keyspaceLiteralPattern = `^[a-zA-Z0-9][a-zA-Z0-9_]{0,48}$`
-	strategyLiteralPatten  = `^SimpleStrategy|NetworkTopologyStrategy$`
+	strategyLiteralPatten  = `^SimpleStrategy|NetworkTopologyStrategy|SingleRegionStrategy$`
 )
 
 var (
