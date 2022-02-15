@@ -20,3 +20,4 @@ terraform-provider-cassandra
 .vscode
 
 dist
+vendor/*
