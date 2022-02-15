@@ -216,6 +216,8 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 
 	cluster.Keyspace = "system"
 
+	cluster.Consistency = 0x06
+
 	cluster.ProtoVersion = protocolVersion
 
 	if hostFilter {
