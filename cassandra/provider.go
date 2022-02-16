@@ -12,15 +12,28 @@ import (
 	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 var (
 	allowedTLSProtocols = map[string]uint16{
-		"SSL3.0": tls.VersionSSL30,
+		// "SSL3.0": tls.VersionSSL30,
 		"TLS1.0": tls.VersionTLS10,
 		"TLS1.1": tls.VersionTLS11,
 		"TLS1.2": tls.VersionTLS12,
 		"TLS1.3": tls.VersionTLS13,
+	}
+
+	allowedConsistencies = map[string]gocql.Consistency{
+		"ANY":          gocql.Any,
+		"ONE":          gocql.One,
+		"TWO":          gocql.Two,
+		"THREE":        gocql.Three,
+		"QUORUM":       gocql.Quorum,
+		"ALL":          gocql.All,
+		"LOCAL_QUORUM": gocql.LocalQuorum,
+		"EACH_QUORUM":  gocql.EachQuorum,
+		"LOCAL_ONE":    gocql.LocalOne,
 	}
 )
 
@@ -49,26 +62,11 @@ func Provider() *schema.Provider {
 				Sensitive:   true,
 			},
 			"port": &schema.Schema{
-				Type:        schema.TypeInt,
-				Optional:    true,
-				DefaultFunc: schema.EnvDefaultFunc("CASSANDRA_PORT", 9042),
-				Description: "Cassandra CQL Port",
-				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
-					port := i.(int)
-
-					if port <= 0 || port >= 65535 {
-						return diag.Diagnostics{
-							{
-								Severity:      diag.Error,
-								Summary:       "Invalid port number",
-								Detail:        fmt.Sprintf("%d: invalid value - must be between 1 and 65535", port),
-								AttributePath: path,
-							},
-						}
-					}
-
-					return nil
-				},
+				Type:         schema.TypeInt,
+				Optional:     true,
+				DefaultFunc:  schema.EnvDefaultFunc("CASSANDRA_PORT", 9042),
+				Description:  "Cassandra CQL Port",
+				ValidateFunc: validation.IsPortNumber,
 			},
 			"host": &schema.Schema{
 				Type:         schema.TypeString,
@@ -133,26 +131,11 @@ func Provider() *schema.Provider {
 				Description: "Use SSL when connecting to cluster",
 			},
 			"min_tls_version": &schema.Schema{
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "TLS1.2",
-				Description: "Minimum TLS Version used to connect to the cluster - allowed values are SSL3.0, TLS1.0, TLS1.1, TLS1.2. Applies only when useSSL is enabled",
-				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
-					minTLSVersion := i.(string)
-
-					if allowedTLSProtocols[minTLSVersion] == 0 {
-						return diag.Diagnostics{
-							{
-								Severity:      diag.Error,
-								Summary:       "Invalid TLS",
-								Detail:        fmt.Sprintf("%s: invalid value - must be one of SSL3.0, TLS1.0, TLS1.1, TLS1.2", minTLSVersion),
-								AttributePath: path,
-							},
-						}
-					}
-
-					return nil
-				},
+				Type:         schema.TypeString,
+				Optional:     true,
+				Default:      "TLS1.2",
+				Description:  "Minimum TLS Version used to connect to the cluster - allowed values are SSL3.0, TLS1.0, TLS1.1, TLS1.2. Applies only when useSSL is enabled",
+				ValidateFunc: validation.StringInSlice([]string{"TLS1.0", "TLS1.1", "TLS1.2", "TLS1.3"}, false),
 			},
 			"protocol_version": &schema.Schema{
 				Type:        schema.TypeInt,
@@ -164,7 +147,24 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     gocql.Quorum.String(),
-				Description: "CQL Binary Protocol Version",
+				Description: "Default consistency level",
+			},
+			"cql_version": &schema.Schema{
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "3.0.0",
+				Description: "CQL version",
+			},
+			"keyspace": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+				// Default:     "system",
+				Description: "Initial Keyspace",
+			},
+			"disable_initial_host_lookup": &schema.Schema{
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Description: "Whether the driver will not attempt to get host info from the system.peers table",
 			},
 		},
 	}
@@ -188,7 +188,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 
 	var rawHosts []interface{}
 
-	if rawHost, getHost := d.GetOk("host"); getHost == true {
+	if rawHost, getHost := d.GetOk("host"); getHost {
 		rawHosts = []interface{}{rawHost}
 	} else {
 		rawHosts = d.Get("hosts").([]interface{})
@@ -218,11 +218,13 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 
 	cluster.Timeout = time.Minute * time.Duration(1)
 
-	cluster.CQLVersion = "3.0.0"
+	cluster.CQLVersion = d.Get("cql_version").(string)
 
-	cluster.Keyspace = "system"
+	if v, ok := d.GetOk("keyspace"); ok && v.(string) != "" {
+		cluster.Keyspace = v.(string)
+	}
 
-	cluster.Consistency = resolveConsistency(d.Get("consistency").(string))
+	cluster.Consistency = allowedConsistencies[d.Get("consistency").(string)]
 
 	cluster.ProtoVersion = protocolVersion
 
@@ -230,7 +232,9 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		cluster.HostFilter = gocql.WhiteListHostFilter(hosts...)
 	}
 
-	cluster.DisableInitialHostLookup = true
+	if v, ok := d.GetOkExists("disable_initial_host_lookup"); ok {
+		cluster.DisableInitialHostLookup = v.(bool)
+	}
 
 	if useSSL {
 
@@ -263,31 +267,4 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	return cluster, diags
-}
-
-func resolveConsistency(c string) gocql.Consistency {
-	switch string(c) {
-	case "ANY":
-		return gocql.Any
-	case "ONE":
-		return gocql.One
-	case "TWO":
-		return gocql.Two
-	case "THREE":
-		return gocql.Three
-	case "QUORUM":
-		return gocql.Quorum
-	case "ALL":
-		return gocql.All
-	case "LOCAL_QUORUM":
-		return gocql.LocalQuorum
-	case "EACH_QUORUM":
-		return gocql.EachQuorum
-	case "LOCAL_ONE":
-		return gocql.LocalOne
-	default:
-		return gocql.Quorum
-	}
-
-	return gocql.Quorum
 }

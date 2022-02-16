@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 const (
@@ -161,13 +162,11 @@ func resourceCassandraGrant() *schema.Resource {
 				},
 			},
 			identifierGrantee: &schema.Schema{
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
-				Description: "role name who we are granting privilege(s) to",
-				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
-					return validIdentifier(i, path, "grantee", validRoleRegex)
-				},
+				Type:         schema.TypeString,
+				Required:     true,
+				ForceNew:     true,
+				Description:  "role name who we are granting privilege(s) to",
+				ValidateFunc: validation.StringLenBetween(1, 256),
 			},
 			identifierResourceType: &schema.Schema{
 				Type:        schema.TypeString,
@@ -236,13 +235,11 @@ func resourceCassandraGrant() *schema.Resource {
 				ConflictsWith: []string{identifierFunctionName, identifierRoleName, identifierMbeanName, identifierMbeanPattern},
 			},
 			identifierRoleName: &schema.Schema{
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Description: fmt.Sprintf("name of the role, applicable only for resource %s", resourceRole),
-				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
-					return validIdentifier(i, path, "role name", validRoleRegex)
-				},
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Description:   fmt.Sprintf("name of the role, applicable only for resource %s", resourceRole),
+				ValidateFunc:  validation.StringLenBetween(1, 256),
 				ConflictsWith: []string{identifierFunctionName, identifierTableName, identifierMbeanName, identifierMbeanPattern, identifierKeyspaceName},
 			},
 			identifierMbeanName: &schema.Schema{

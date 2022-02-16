@@ -13,16 +13,15 @@ import (
 	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 const (
 	keyspaceLiteralPattern = `^[a-zA-Z0-9][a-zA-Z0-9_]{0,48}$`
-	strategyLiteralPatten  = `^SimpleStrategy|NetworkTopologyStrategy|SingleRegionStrategy$`
 )
 
 var (
 	keyspaceRegex, _ = regexp.Compile(keyspaceLiteralPattern)
-	strategyRegex, _ = regexp.Compile(strategyLiteralPatten)
 	boolToAction     = map[bool]string{
 		true:  "CREATE",
 		false: "ALTER",
@@ -73,26 +72,11 @@ func resourceCassandraKeyspace() *schema.Resource {
 				},
 			},
 			"replication_strategy": &schema.Schema{
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    false,
-				Description: "Keyspace replication strategy - must be one of SimpleStrategy or NetworkTopologyStrategy",
-				ValidateDiagFunc: func(i interface{}, path cty.Path) diag.Diagnostics {
-					strategy := i.(string)
-
-					if !strategyRegex.MatchString(strategy) {
-						return diag.Diagnostics{
-							{
-								Severity:      diag.Error,
-								Summary:       "Invalid replication strategy",
-								Detail:        fmt.Sprintf("%s: invalid replication strategy - must match %s", strategy, strategyLiteralPatten),
-								AttributePath: path,
-							},
-						}
-					}
-
-					return nil
-				},
+				Type:         schema.TypeString,
+				Required:     true,
+				ForceNew:     false,
+				Description:  "Keyspace replication strategy - must be one of SimpleStrategy or NetworkTopologyStrategy",
+				ValidateFunc: validation.StringInSlice([]string{"SimpleStrategy", "NetworkTopologyStrategy", "SingleRegionStrategy"}, false),
 			},
 			"strategy_options": &schema.Schema{
 				Type:        schema.TypeMap,
