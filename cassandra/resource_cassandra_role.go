@@ -50,7 +50,7 @@ func resourceCassandraRole() *schema.Resource {
 				ForceNew:     false,
 				Description:  "Password for user when using Cassandra internal authentication",
 				Sensitive:    true,
-				ValidateFunc: validation.StringLenBetween(40, 512),
+				ValidateFunc: validation.StringLenBetween(20, 512),
 			},
 		},
 	}
